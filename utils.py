@@ -17,6 +17,7 @@ from collections import Counter
 from playerokapi.account import Account
 from playerokapi.exceptions import BotCheckDetectedException
 from proxy_utils import parse_proxy, requests_proxy
+from startup_alert import deliver_startup_alert
 
 from settings import Settings as sett, set_json
 from data import Data as data
@@ -667,6 +668,16 @@ def prompt_proxy(service: str) -> str:
         print(f"\n{Fore.LIGHTRED_EX}Неверный адрес или тип прокси. Попробуйте снова.")
 
 
+def notify_startup_failure_and_stop(config: dict, problem: str) -> None:
+    """Preserve credentials and wait for an owner notification before stopping."""
+    logger.error(f"{Fore.LIGHTRED_EX}{problem} Настройки аккаунта сохранены без изменений.")
+    if not deliver_startup_alert(config, problem):
+        logger.error("Не удалось отправить уведомление: не настроен Telegram-бот или получатель.")
+    else:
+        logger.info("Уведомление о проблеме отправлено владельцу; бот остановлен.")
+    raise SystemExit(0)
+
+
 def configure_config():
     config = sett.get("config")
 
@@ -683,7 +694,9 @@ def configure_config():
             f"\n\n   {Fore.CYAN}pluniversal setup"
             f"\n\n{Fore.WHITE}Это запустит интерактивную настройку прямо в терминале.\n"
         )
-        sys.exit(0)
+        notify_startup_failure_and_stop(
+            config, "Не хватает обязательных настроек для запуска бота."
+        )
 
     while not config["playerok"]["api"]["cookies"] :
         while not config["playerok"]["api"]["cookies"]:
@@ -834,12 +847,7 @@ def configure_config():
             f"Пожалуйста, проверьте его и введите снова."
         )
         
-        config["playerok"]["api"]["cookies"] = ""
-        config["playerok"]["api"]["user_agent"] = ""
-        config["playerok"]["api"]["proxy"] = ""
-        sett.set("config", config)
-        
-        return configure_config()
+        notify_startup_failure_and_stop(config, "Прокси Playerok не отвечает.")
     elif config["playerok"]["api"]["proxy"]:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok прокси успешно работает.")
 
@@ -848,12 +856,9 @@ def configure_config():
         reason = reason if reason else "Не удалось подключиться к вашему Playerok аккаунту. Пожалуйста, убедитесь, что у вас указаны верные cookie-данные и введите их снова."
         print(f"\n{Fore.LIGHTRED_EX}{reason}")
         
-        config["playerok"]["api"]["cookies"] = ""
-        config["playerok"]["api"]["user_agent"] = ""
-        config["playerok"]["api"]["proxy"] = ""
-        sett.set("config", config)
-        
-        return configure_config()
+        notify_startup_failure_and_stop(
+            config, "Не удалось подключиться к аккаунту Playerok. Проверьте Cookie-данные и прокси."
+        )
     else:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok аккаунт успешно авторизован.")
 
@@ -863,12 +868,7 @@ def configure_config():
             f"Увы, я не могу запустить бота на заблокированном аккаунте..."
         )
         
-        config["playerok"]["api"]["cookies"] = ""
-        config["playerok"]["api"]["user_agent"] = ""
-        config["playerok"]["api"]["proxy"] = ""
-        sett.set("config", config)
-        
-        return configure_config()
+        notify_startup_failure_and_stop(config, "Аккаунт Playerok заблокирован.")
 
     if config["telegram"]["api"]["proxy"] and not is_proxy_working(
         config["telegram"]["api"]["proxy"], 
@@ -879,11 +879,7 @@ def configure_config():
             f"Пожалуйста, проверьте его и введите снова."
         )
         
-        config["telegram"]["api"]["token"] = ""
-        config["telegram"]["api"]["proxy"] = ""
-        sett.set("config", config)
-        
-        return configure_config()
+        notify_startup_failure_and_stop(config, "Прокси Telegram не отвечает.")
     elif config["telegram"]["api"]["proxy"]:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram прокси успешно работает.")
 
@@ -892,12 +888,7 @@ def configure_config():
             f"{Fore.LIGHTRED_EX}\nНе удалось подключиться к вашему Telegram боту. "
             f"Если вы находитесь на территории России, вам нужно подключить прокси к Telegram боту или использовать VPN, в виду блокировок со стороны РКН."
         )
-        config["telegram"]["api"]["token"] = ""
-        config["telegram"]["api"]["proxy"] = ""
-        config["telegram"]["api"]["custom_api_url"] = ""
-        sett.set("config", config)
-
-        return configure_config()
+        notify_startup_failure_and_stop(config, "Telegram API не отвечает. Проверьте токен и сеть.")
     else:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram бот успешно работает.")
 
