@@ -86,23 +86,31 @@ async def start_playerok_bot():
 
 
 async def monitor_playerok_proxy():
-    from settings import Settings as sett
+    from settings import Settings as sett, PROXY_CHECK_LIMITS
     from startup_alert import deliver_playerok_alert
     from utils import is_proxy_working
 
     failures = 0
     notified = False
     while True:
-        await asyncio.sleep(60)
         config = sett.get("config")
-        proxy = config["playerok"]["api"]["proxy"]
+        minimum, maximum = PROXY_CHECK_LIMITS["proxy_check_interval"]
+        interval = max(minimum, min(config["playerok"]["api"]["proxy_check_interval"], maximum))
+        await asyncio.sleep(interval)
+        config = sett.get("config")
+        playerok_api = config["playerok"]["api"]
+        proxy = playerok_api["proxy"]
         if not proxy:
             failures = 0
             continue
 
-        working = await asyncio.to_thread(is_proxy_working, proxy, timeout=10)
+        minimum, maximum = PROXY_CHECK_LIMITS["proxy_check_timeout"]
+        timeout = max(minimum, min(playerok_api["proxy_check_timeout"], maximum))
+        minimum, maximum = PROXY_CHECK_LIMITS["proxy_check_failures"]
+        threshold = max(minimum, min(playerok_api["proxy_check_failures"], maximum))
+        working = await asyncio.to_thread(is_proxy_working, proxy, timeout=timeout)
         failures = 0 if working else failures + 1
-        if failures >= 2 and not notified:
+        if failures >= threshold and not notified:
             problem = "Прокси Playerok перестал отвечать во время работы."
             from plbot.playerokbot import get_playerok_bot
             playerok_bot = get_playerok_bot()

@@ -5,7 +5,7 @@ from logging import getLogger
 from aiogram import types, Router, Bot, F
 from aiogram.fsm.context import FSMContext
 
-from settings import Settings as sett
+from settings import Settings as sett, PROXY_CHECK_LIMITS
 from proxy_utils import normalize_proxy
 from core.configs import (
     MAX_IMPORT_SIZE,
@@ -238,6 +238,43 @@ async def handler_waiting_for_requests_timeout(message: types.Message, state: FS
             text=templ.conn_float_text(e), 
             reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())
         )
+
+
+@router.message(states.SettingsStates.waiting_for_proxy_check_interval, F.text)
+@router.message(states.SettingsStates.waiting_for_proxy_check_timeout, F.text)
+@router.message(states.SettingsStates.waiting_for_proxy_check_failures, F.text)
+async def handler_waiting_for_proxy_check_setting(message: types.Message, state: FSMContext):
+    options = {
+        states.SettingsStates.waiting_for_proxy_check_interval.state: ("proxy_check_interval", "Пауза между проверками", "сек."),
+        states.SettingsStates.waiting_for_proxy_check_timeout.state: ("proxy_check_timeout", "Ожидание ответа проверки", "сек."),
+        states.SettingsStates.waiting_for_proxy_check_failures.state: ("proxy_check_failures", "Число неудачных проверок", ""),
+    }
+    key, label, unit = options[await state.get_state()]
+    minimum, maximum = PROXY_CHECK_LIMITS[key]
+    try:
+        value = int(message.text.strip())
+    except ValueError:
+        value = None
+
+    if value is None or not minimum <= value <= maximum:
+        await throw_float_message(
+            state=state,
+            message=message,
+            text=templ.conn_float_text(f"❌ Введите целое число от {minimum} до {maximum} {unit}."),
+            reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())
+        )
+        return
+
+    config = sett.get("config")
+    config["playerok"]["api"][key] = value
+    sett.set("config", config)
+    await state.set_state(None)
+    await throw_float_message(
+        state=state,
+        message=message,
+        text=templ.conn_float_text(f"✅ <b>{label}</b>: {value} {unit}. Новое значение будет применено без перезапуска бота."),
+        reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())
+    )
 
 
 @router.message(states.SettingsStates.waiting_for_listener_requests_delay, F.text)
