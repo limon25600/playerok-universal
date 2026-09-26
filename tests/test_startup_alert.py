@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from startup_alert import deliver_startup_alert
+from startup_alert import deliver_startup_alert, deliver_playerok_alert
 
 
 class StartupAlertTests(unittest.TestCase):
@@ -64,6 +64,24 @@ class StartupAlertTests(unittest.TestCase):
         self.assertTrue(deliver_startup_alert(self.config, "test failure", send=send, pause=pauses.append))
         self.assertEqual(len(attempts), 2)
         self.assertEqual(pauses, [60])
+
+    def test_playerok_notice_keeps_telegram_available_without_retry_loop(self):
+        self.config["telegram"]["api"]["proxy"] = ""
+        messages = []
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {"ok": True}
+
+        def send(_url, **kwargs):
+            messages.append(kwargs["json"]["text"])
+            return Response()
+
+        self.assertTrue(deliver_playerok_alert(self.config, "Прокси не отвечает", send=send))
+        self.assertIn("Telegram-бот продолжает работать", messages[0])
+        self.assertIn("/restart", messages[0])
 
 
 if __name__ == "__main__":

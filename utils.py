@@ -681,11 +681,7 @@ def notify_startup_failure_and_stop(config: dict, problem: str) -> None:
 def configure_config():
     config = sett.get("config")
 
-    needs_setup = (
-        not config["playerok"]["api"]["cookies"] or
-        not config["telegram"]["api"]["token"] or
-        not config["telegram"]["bot"]["password"]
-    )
+    needs_setup = not config["telegram"]["api"]["token"] or not config["telegram"]["bot"]["password"]
 
     if needs_setup and not sys.stdin.isatty():
         print(
@@ -698,7 +694,7 @@ def configure_config():
             config, "Не хватает обязательных настроек для запуска бота."
         )
 
-    while not config["playerok"]["api"]["cookies"] :
+    while not config["playerok"]["api"]["cookies"] and sys.stdin.isatty():
         while not config["playerok"]["api"]["cookies"]:
             print(
                 f"\n{Fore.LIGHTYELLOW_EX}┌────┤ Введите {Fore.YELLOW}Cookie-Данные {Fore.LIGHTYELLOW_EX}├──────────────────────┐{Fore.WHITE}"
@@ -841,34 +837,30 @@ def configure_config():
     
     logger.info("")
     
-    if config["playerok"]["api"]["proxy"] and not is_proxy_working(config["playerok"]["api"]["proxy"]):
+    playerok_problem = None
+    if not config["playerok"]["api"]["cookies"]:
+        playerok_problem = "Не заданы Cookie-данные Playerok."
+    elif config["playerok"]["api"]["proxy"] and not is_proxy_working(config["playerok"]["api"]["proxy"]):
         print(
             f"\n{Fore.LIGHTRED_EX}Похоже, что прокси для Playerok аккаунта не работает. "
             f"Пожалуйста, проверьте его и введите снова."
         )
         
-        notify_startup_failure_and_stop(config, "Прокси Playerok не отвечает.")
+        playerok_problem = "Прокси Playerok не отвечает."
     elif config["playerok"]["api"]["proxy"]:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok прокси успешно работает.")
 
-    is_pl_acc_working, reason = is_pl_account_working()
-    if not is_pl_acc_working:
-        reason = reason if reason else "Не удалось подключиться к вашему Playerok аккаунту. Пожалуйста, убедитесь, что у вас указаны верные cookie-данные и введите их снова."
-        print(f"\n{Fore.LIGHTRED_EX}{reason}")
-        
-        notify_startup_failure_and_stop(
-            config, "Не удалось подключиться к аккаунту Playerok. Проверьте Cookie-данные и прокси."
-        )
-    else:
-        logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok аккаунт успешно авторизован.")
+    if not playerok_problem:
+        is_pl_acc_working, reason = is_pl_account_working()
+        if not is_pl_acc_working:
+            playerok_problem = reason or "Не удалось подключиться к аккаунту Playerok. Проверьте Cookie-данные и прокси."
+            logger.error(f"{Fore.LIGHTRED_EX}{playerok_problem}")
+        else:
+            logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok аккаунт успешно авторизован.")
 
-    if is_pl_account_banned():
-        print(
-            f"{Fore.LIGHTRED_EX}\nВаш Playerok аккаунт забанен! "
-            f"Увы, я не могу запустить бота на заблокированном аккаунте..."
-        )
-        
-        notify_startup_failure_and_stop(config, "Аккаунт Playerok заблокирован.")
+    if not playerok_problem and is_pl_account_banned():
+        playerok_problem = "Аккаунт Playerok заблокирован."
+        logger.error(f"{Fore.LIGHTRED_EX}{playerok_problem}")
 
     if config["telegram"]["api"]["proxy"] and not is_proxy_working(
         config["telegram"]["api"]["proxy"], 
@@ -891,6 +883,8 @@ def configure_config():
         notify_startup_failure_and_stop(config, "Telegram API не отвечает. Проверьте токен и сеть.")
     else:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram бот успешно работает.")
+
+    return playerok_problem
 
 
 def get_stats():

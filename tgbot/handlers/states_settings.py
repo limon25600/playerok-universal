@@ -68,7 +68,7 @@ async def handler_waiting_for_cookies(message: types.Message, state: FSMContext)
         await throw_float_message(
             state=state,
             message=message,
-            text=templ.auth_float_text(f"🍪 <b>Cookie-данные</b> были успешно изменены на: <blockquote>{str_cookies}</blockquote>"),
+            text=templ.auth_float_text("✅ <b>Cookie-данные</b> сохранены. Для подключения выполните /restart."),
             reply_markup=templ.back_kb(calls.MenuNavigation(to="auth").pack())
         )
     except Exception as e:
@@ -97,7 +97,7 @@ async def handler_waiting_for_user_agent(message: types.Message, state: FSMConte
         await throw_float_message(
             state=state,
             message=message,
-            text=templ.auth_float_text(f"✅ <b>User Agent</b> был успешно изменён на <b>{user_agent}</b>"),
+            text=templ.auth_float_text("✅ <b>User Agent</b> сохранён. Для подключения выполните /restart."),
             reply_markup=templ.back_kb(calls.MenuNavigation(to="auth").pack())
         )
     except Exception as e:
@@ -130,7 +130,7 @@ async def handler_waiting_for_pl_proxy(message: types.Message, state: FSMContext
         await throw_float_message(
             state=state,
             message=message,
-            text=templ.auth_float_text(f"✅ <b>Прокси для Playerok</b> был успешно изменён на <b>{proxy}</b>"),
+            text=templ.conn_float_text("✅ <b>Прокси для Playerok</b> сохранён. Для подключения выполните /restart."),
             reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())
         )
     except Exception as e:

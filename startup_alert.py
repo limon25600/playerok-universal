@@ -9,8 +9,9 @@ from proxy_utils import requests_proxy
 logger = logging.getLogger("universal")
 
 
-def deliver_startup_alert(config: dict, problem: str, send=None, pause=None) -> bool:
-    """Retry until Telegram confirms delivery; return False if no recipient exists."""
+def deliver_startup_alert(config: dict, problem: str, send=None, pause=None,
+                          message: str | None = None, retry: bool = True) -> bool:
+    """Send an owner notice, optionally retrying until delivery succeeds."""
     token = config["telegram"]["api"]["token"]
     recipients = config["telegram"]["bot"]["signed_users"]
     if not recipients:
@@ -35,7 +36,7 @@ def deliver_startup_alert(config: dict, problem: str, send=None, pause=None) -> 
         proxy_url = requests_proxy(telegram_proxy)
         proxies = {"http": proxy_url, "https": proxy_url}
 
-    message = (
+    message = message or (
         f"⚠️ Playerok Universal остановлен. {problem}\n\n"
         "Cookie-данные, User-Agent и прокси сохранены. Проверьте прокси и обновите "
         "Cookie-данные через pluniversal setup. При необходимости переустановите бота "
@@ -56,5 +57,19 @@ def deliver_startup_alert(config: dict, problem: str, send=None, pause=None) -> 
                         return True
                 except Exception:
                     pass
+        if not retry:
+            return False
         logger.warning("Telegram недоступен; повторю отправку уведомления через 60 секунд.")
         pause(60)
+
+
+def deliver_playerok_alert(config: dict, problem: str, send=None) -> bool:
+    """Warn the owner while keeping Telegram control available."""
+    message = (
+        f"⚠️ Playerok недоступен: {problem}\n\n"
+        "Telegram-бот продолжает работать. Откройте /start → Соединение → "
+        "Прокси для Playerok, укажите новый прокси и выполните /restart. "
+        "Если проблема в Cookie-данных, обновите их в разделе Авторизация. "
+        "Сохранённые настройки и данные не удалены."
+    )
+    return deliver_startup_alert(config, problem, send=send, message=message, retry=False)
