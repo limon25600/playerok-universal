@@ -13,6 +13,7 @@ from settings import Settings as sett
 from core.modules import get_modules
 from core.handlers import call_bot_event
 from utils import normalize_custom_api_url
+from proxy_utils import normalize_proxy, parse_proxy
 
 from . import router as main_router
 from . import templates as templ
@@ -48,7 +49,7 @@ class TelegramBot:
         self.custom_api_url = config["telegram"]["api"]["custom_api_url"]
 
         if self.proxy:
-            session = AiohttpSession(proxy=f"http://{self.proxy}")
+            session = AiohttpSession(proxy=normalize_proxy(self.proxy))
         else:
             session = None
 
@@ -134,12 +135,9 @@ class TelegramBot:
         logger.info(f"{Fore.LIGHTBLUE_EX}Telegram бот {Fore.LIGHTWHITE_EX}@{self.me.username} {Fore.LIGHTBLUE_EX}запущен и активен")
         
         if self.proxy:
-            if "@" in self.proxy:
-                user, password = self.proxy.split("@")[0].split(":")
-                ip, port = self.proxy.split("@")[1].split(":")
-            else:
-                user, password = None, None
-                ip, port = self.proxy.split(":")
+            parsed_proxy = parse_proxy(self.proxy)
+            user, password = parsed_proxy.username, parsed_proxy.password
+            ip, port = parsed_proxy.hostname, str(parsed_proxy.port)
             
             ip = ".".join([("*" * len(nums)) if i >= 3 else nums for i, nums in enumerate(ip.split("."), start=1)])
             port = f"{port[:3]}**"

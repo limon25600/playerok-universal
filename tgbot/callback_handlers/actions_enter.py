@@ -126,7 +126,7 @@ async def callback_enter_pl_proxy(callback: CallbackQuery, state: FSMContext):
         state=state,
         message=callback.message,
         text=templ.conn_float_text(
-            f"🌐 Введите новый <b>прокси для Playerok</b> (формат: user:pass@ip:port или ip:port):"
+            f"🌐 Введите новый <b>прокси для Playerok</b>: <code>socks5://user:pass@host:port</code> или <code>http://host:port</code>. Без префикса используется HTTP."
             f"\n\n・ <b>Текущий:</b> <code>{proxy}</code>"
         ),
         reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())
@@ -144,7 +144,7 @@ async def callback_enter_tg_proxy(callback: CallbackQuery, state: FSMContext):
         state=state,
         message=callback.message,
         text=templ.conn_float_text(
-            f"🌐 Введите новый <b>прокси для Telegram</b> (формат: user:pass@ip:port или ip:port):"
+            f"🌐 Введите новый <b>прокси для Telegram</b>: <code>socks5://user:pass@host:port</code> или <code>http://host:port</code>. Без префикса используется HTTP."
             f"\n\n・ <b>Текущий:</b> <code>{proxy}</code>"
         ),
         reply_markup=templ.back_kb(calls.MenuNavigation(to="conn").pack())

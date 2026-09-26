@@ -6,6 +6,7 @@ from aiogram import types, Router, Bot, F
 from aiogram.fsm.context import FSMContext
 
 from settings import Settings as sett
+from proxy_utils import normalize_proxy
 from core.configs import (
     MAX_IMPORT_SIZE,
     SUPPORTED_EXTENSIONS,
@@ -118,12 +119,12 @@ async def handler_waiting_for_pl_proxy(message: types.Message, state: FSMContext
         if len(proxy) <= 3:
             raise Exception("❌ Слишком короткое значение")
         if not is_proxy_valid(proxy):
-            raise Exception("❌ Неверный формат прокси. Правильный формат: user:pass@ip:port или ip:port")
+            raise Exception("❌ Неверный формат. Укажите http:// или socks5:// перед user:pass@host:port или host:port")
         if not is_proxy_working(proxy):
             raise Exception("❌ Указанный вами прокси не работает. Нет подключения к playerok.com")
 
         config = sett.get("config")
-        config["playerok"]["api"]["proxy"] = proxy
+        config["playerok"]["api"]["proxy"] = normalize_proxy(proxy)
         sett.set("config", config)
         
         await throw_float_message(
@@ -151,12 +152,12 @@ async def handler_waiting_for_tg_proxy(message: types.Message, state: FSMContext
         if len(proxy) <= 3:
             raise Exception("❌ Слишком короткое значение")
         if not is_proxy_valid(proxy):
-            raise Exception("❌ Неверный формат прокси. Правильный формат: user:pass@ip:port или ip:port")
+            raise Exception("❌ Неверный формат. Укажите http:// или socks5:// перед user:pass@host:port или host:port")
         if not is_proxy_working(proxy, "https://api.telegram.org/"):
             raise Exception("❌ Указанный вами прокси не работает. Нет подключения к api.telegram.org")
 
         config = sett.get("config")
-        config["telegram"]["api"]["proxy"] = proxy
+        config["telegram"]["api"]["proxy"] = normalize_proxy(proxy)
         sett.set("config", config)
         
         await throw_float_message(

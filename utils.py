@@ -16,6 +16,7 @@ from collections import Counter
 
 from playerokapi.account import Account
 from playerokapi.exceptions import BotCheckDetectedException
+from proxy_utils import parse_proxy, requests_proxy
 
 from settings import Settings as sett, set_json
 from data import Data as data
@@ -234,29 +235,16 @@ def is_user_agent_valid(ua: str) -> bool:
 
 
 def is_proxy_valid(proxy: str) -> bool:
-    ip_pattern = r'(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)'
-    pattern_ip_port = re.compile(
-        rf'^{ip_pattern}\.{ip_pattern}\.{ip_pattern}\.{ip_pattern}:(\d+)$'
-    )
-    pattern_auth_ip_port = re.compile(
-        rf'^[^:@]+:[^:@]+@{ip_pattern}\.{ip_pattern}\.{ip_pattern}\.{ip_pattern}:(\d+)$'
-    )
-    match = pattern_ip_port.match(proxy)
-    if match:
-        port = int(match.group(1))
-        return 1 <= port <= 65535
-    match = pattern_auth_ip_port.match(proxy)
-    if match:
-        port = int(match.group(1))
-        return 1 <= port <= 65535
-    return False
+    try:
+        parse_proxy(proxy)
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 def is_proxy_working(proxy: str, test_url="https://playerok.com", timeout=30) -> bool:
-    proxies = {
-        "http": f"http://{proxy}",
-        "https": f"http://{proxy}"
-    }
+    proxy_url = requests_proxy(proxy)
+    proxies = {"http": proxy_url, "https": proxy_url}
     try:
         response = requests.get(test_url, proxies=proxies, timeout=timeout)
         return response.status_code < 404
@@ -293,10 +281,8 @@ def is_custom_api_url_working(cust_api_url: str) -> bool:
         proxy = config["telegram"]["api"]["proxy"]
 
         if proxy:
-            proxies = {
-                "http": f"http://{proxy}",
-                "https": f"http://{proxy}",
-            }
+            proxy_url = requests_proxy(proxy)
+            proxies = {"http": proxy_url, "https": proxy_url}
         else:
             proxies = None
 
@@ -329,10 +315,8 @@ def is_tg_bot_exists() -> bool:
         )
 
         if proxy:
-            proxies = {
-                "http": f"http://{proxy}",
-                "https": f"http://{proxy}",
-            }
+            proxy_url = requests_proxy(proxy)
+            proxies = {"http": proxy_url, "https": proxy_url}
         else:
             proxies = None
 
@@ -652,6 +636,37 @@ def rebind_item(old_id: str, new: dict) -> int:
 
 
 
+def prompt_proxy(service: str) -> str:
+    """Ask for a proxy type and address during interactive setup."""
+    while True:
+        print(
+            f"\n{Fore.LIGHTYELLOW_EX}┌────┤ Прокси для {Fore.LIGHTBLUE_EX}{service} {Fore.LIGHTYELLOW_EX}├──────────────────────┐{Fore.WHITE}"
+            f"\n\n  Тип прокси: {Fore.WHITE}1 — HTTP, 2 — SOCKS5"
+            f"\n  {Fore.LIGHTWHITE_EX}Нажмите Enter, чтобы пропустить настройку"
+        )
+        choice = input(f"  {Fore.WHITE}→ {Fore.LIGHTWHITE_EX}").strip()
+        if not choice:
+            return ""
+        if choice not in ("1", "2"):
+            print(f"\n{Fore.LIGHTRED_EX}Выберите 1, 2 или нажмите Enter.")
+            continue
+        scheme = "http" if choice == "1" else "socks5"
+        print(
+            f"\n  Введите адрес прокси ({scheme}): user:password@host:port или host:port"
+            f"\n  {Fore.LIGHTWHITE_EX}Можно также ввести URL с префиксом {scheme}://"
+        )
+        address = input(f"  {Fore.WHITE}→ {Fore.LIGHTWHITE_EX}").strip()
+        if not address:
+            return ""
+        if "://" not in address and address.count(":") == 3 and "@" not in address:
+            host, port, user, password = address.split(":", 3)
+            address = f"{user}:{password}@{host}:{port}"
+        proxy = address if "://" in address else f"{scheme}://{address}"
+        if is_proxy_valid(proxy) and parse_proxy(proxy).scheme == scheme:
+            return proxy
+        print(f"\n{Fore.LIGHTRED_EX}Неверный адрес или тип прокси. Попробуйте снова.")
+
+
 def configure_config():
     config = sett.get("config")
 
@@ -717,30 +732,14 @@ def configure_config():
                 )
         
         while not config["playerok"]["api"]["proxy"]:
-            print(
-                f"\n{Fore.LIGHTYELLOW_EX}┌────┤ Введите {Fore.LIGHTBLUE_EX}HTTP прокси {Fore.LIGHTYELLOW_EX}для Playerok ├──────────────────────┐{Fore.WHITE}"
-                f"\n\n  Формат: user:password@ip:port, ip:port:user:password или ip:port"
-                f"\n  {Fore.LIGHTWHITE_EX}Или пропустите эту настройку, нажав Enter"
-                f"\n\n  {Fore.LIGHTWHITE_EX}· Пример: {Fore.WHITE}DRjcQTm3Yc:m8GnUN8Q9L@46.161.30.187:8000"
-            )
-            proxy = input(f"  {Fore.WHITE}→ {Fore.LIGHTWHITE_EX}").strip()
-
-            if proxy.count(":") == 3:
-                ip, port, user, passwd = proxy.split(":")
-                proxy = f"{user}:{passwd}@{ip}:{port}"
+            proxy = prompt_proxy("Playerok")
             
             if not proxy:
                 print(f"\n{Fore.WHITE}Вы пропустили ввод прокси.")
                 break
-            if is_proxy_valid(proxy):
-                config["playerok"]["api"]["proxy"] = proxy
-                sett.set("config", config)
-                print(f"\n{Fore.YELLOW}Прокси успешно сохранён в конфиг.")
-            else:
-                print(
-                    f"\n{Fore.LIGHTRED_EX}Похоже, что вы ввели некорректный Прокси. "
-                    f"Убедитесь, что он соответствует формату и попробуйте ещё раз."
-                )
+            config["playerok"]["api"]["proxy"] = proxy
+            sett.set("config", config)
+            print(f"\n{Fore.YELLOW}Прокси успешно сохранён в конфиг.")
 
     while not config["telegram"]["api"]["token"]:
         while not config["telegram"]["api"]["token"]:
@@ -802,31 +801,15 @@ def configure_config():
             print(f"\n{Fore.YELLOW}Кастомный URL успешно сохранён в конфиг.")
 
         while not config["telegram"]["api"]["proxy"]:
-            print(
-                f"\n{Fore.LIGHTYELLOW_EX}┌────┤ Введите {Fore.LIGHTBLUE_EX}HTTP прокси {Fore.LIGHTYELLOW_EX}для Telegram ├──────────────────────┐{Fore.WHITE}"
-                f"\n\n  Формат: user:password@ip:port, ip:port:user:password или ip:port"
-                f"\n  {Fore.LIGHTWHITE_EX}Или пропустите эту настройку, нажав Enter"
-                f"\n\n  {Fore.LIGHTWHITE_EX}· Пример: {Fore.WHITE}DRjcQTm3Yc:m8GnUN8Q9L@46.161.30.187:8000"
-            )
-            proxy = input(f"  {Fore.WHITE}→ {Fore.LIGHTWHITE_EX}").strip()
-
-            if proxy.count(":") == 3:
-                ip, port, user, passwd = proxy.split(":")
-                proxy = f"{user}:{passwd}@{ip}:{port}"
+            proxy = prompt_proxy("Telegram")
             
             if not proxy:
                 print(f"\n{Fore.WHITE}Вы пропустили ввод прокси.")
                 break
 
-            if is_proxy_valid(proxy):
-                config["telegram"]["api"]["proxy"] = proxy
-                sett.set("config", config)
-                print(f"\n{Fore.YELLOW}Прокси успешно сохранён в конфиг.")
-            else:
-                print(
-                    f"\n{Fore.LIGHTRED_EX}Похоже, что вы ввели некорректный прокси. "
-                    f"Убедитесь, что он соответствует формату и попробуйте ещё раз."
-                )
+            config["telegram"]["api"]["proxy"] = proxy
+            sett.set("config", config)
+            print(f"\n{Fore.YELLOW}Прокси успешно сохранён в конфиг.")
 
     while not config["telegram"]["bot"]["password"]:
         print(
