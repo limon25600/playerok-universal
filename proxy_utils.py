@@ -36,6 +36,28 @@ def requests_proxy(proxy: str) -> str:
     return "socks5h://" + url[len("socks5://"):] if url.startswith("socks5://") else url
 
 
+class ProxyCheckState:
+    """Track failures and report transitions for one Playerok proxy."""
+
+    def __init__(self):
+        self.failures = 0
+        self.unavailable = False
+
+    def record(self, working: bool, threshold: int) -> str | None:
+        if working:
+            self.failures = 0
+            if self.unavailable:
+                self.unavailable = False
+                return "recovered"
+            return None
+
+        self.failures += 1
+        if self.failures >= threshold and not self.unavailable:
+            self.unavailable = True
+            return "unavailable"
+        return None
+
+
 def websocket_proxy_options(proxy: str) -> dict:
     url = parse_proxy(proxy)
     options = {

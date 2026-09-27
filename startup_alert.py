@@ -63,6 +63,15 @@ def deliver_startup_alert(config: dict, problem: str, send=None, pause=None,
         pause(60)
 
 
+def deliver_playerok_recovery(config: dict, send=None) -> bool:
+    """Tell the owner that the Playerok proxy check succeeds again."""
+    message = (
+        "✅ Прокси Playerok снова отвечает на проверки. "
+        "Если бот не получает сообщения или события, выполните /restart."
+    )
+    return deliver_startup_alert(config, "", send=send, message=message, retry=False)
+
+
 def deliver_playerok_alert(config: dict, problem: str, send=None) -> bool:
     """Warn the owner while keeping Telegram control available."""
     message = (

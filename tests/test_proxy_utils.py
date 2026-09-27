@@ -1,6 +1,6 @@
 import unittest
 
-from proxy_utils import normalize_proxy, parse_proxy, requests_proxy, websocket_proxy_options
+from proxy_utils import ProxyCheckState, normalize_proxy, parse_proxy, requests_proxy, websocket_proxy_options
 
 
 class ProxyUtilsTests(unittest.TestCase):
@@ -32,6 +32,21 @@ class ProxyUtilsTests(unittest.TestCase):
             "http_proxy_port": 1080,
             "proxy_type": "socks5h",
         })
+
+    def test_proxy_check_state_recovers_and_can_alert_again(self):
+        state = ProxyCheckState()
+        self.assertIsNone(state.record(False, 3))
+        self.assertIsNone(state.record(False, 3))
+        self.assertEqual(state.record(False, 3), "unavailable")
+        self.assertTrue(state.unavailable)
+        self.assertIsNone(state.record(False, 3))
+        self.assertEqual(state.record(True, 3), "recovered")
+        self.assertFalse(state.unavailable)
+        self.assertEqual(state.failures, 0)
+        self.assertIsNone(state.record(True, 3))
+        self.assertIsNone(state.record(False, 3))
+        self.assertIsNone(state.record(False, 3))
+        self.assertEqual(state.record(False, 3), "unavailable")
 
     def test_invalid_proxy_is_rejected(self):
         for proxy in ("ftp://host:21", "socks5://host", "socks5://host:70000", "http://user@host:80", "http://host:80/path", "http://host:80 invalid"):
