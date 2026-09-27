@@ -25,7 +25,7 @@ from updater import (
     check_for_updates, 
     check_new_releases_task
 )
-from utils import configure_config
+from utils import configure_config, check_playerok_connection
 
 
 logger = getLogger("universal")
@@ -75,24 +75,24 @@ async def clear_logs_task():
         await asyncio.sleep(30)
 
 
-async def start_telegram_bot(from_tg=False):
+async def start_telegram_bot():
     from tgbot.telegrambot import TelegramBot
-    run_async_in_thread(TelegramBot().run_bot, (from_tg,))
+    run_async_in_thread(TelegramBot().run_bot)
 
 
-async def start_playerok_bot():
+async def start_playerok_bot(in_thread=False):
     from plbot.playerokbot import PlayerokBot
-    await PlayerokBot().run_bot()
+    playerok_bot = await asyncio.to_thread(PlayerokBot) if in_thread else PlayerokBot()
+    await playerok_bot.run_bot()
 
 
-async def monitor_playerok_proxy():
+async def monitor_playerok_proxy(startup_unavailable=False, notified=False):
     from settings import Settings as sett, PROXY_CHECK_LIMITS
-    from startup_alert import deliver_playerok_alert, deliver_playerok_recovery
+    from startup_alert import deliver_playerok_alert, deliver_playerok_recovery, deliver_playerok_reconnected
     from proxy_utils import ProxyCheckState
     from utils import is_proxy_working
 
     health = ProxyCheckState()
-    notified = False
     last_proxy = None
     while True:
         config = sett.get("config")
@@ -113,6 +113,21 @@ async def monitor_playerok_proxy():
         minimum, maximum = PROXY_CHECK_LIMITS["proxy_check_failures"]
         threshold = max(minimum, min(playerok_api["proxy_check_failures"], maximum))
         working = await asyncio.to_thread(is_proxy_working, proxy, timeout=timeout)
+        if startup_unavailable:
+            if not working:
+                continue
+            try:
+                await start_playerok_bot(in_thread=True)
+            except Exception:
+                logger.exception("Прокси отвечает, но подключить Playerok пока не удалось; повторю попытку.")
+                continue
+            startup_unavailable = False
+            logger.info("Playerok автоматически подключён после восстановления прокси.")
+            if notified:
+                await asyncio.to_thread(deliver_playerok_reconnected, config)
+            notified = False
+            continue
+
         event = health.record(working, threshold)
         if event == "recovered":
             from plbot.playerokbot import get_playerok_bot
@@ -172,13 +187,18 @@ if __name__ == "__main__":
         )
         
         check_for_updates()
-        playerok_problem = configure_config()
+        configure_config()
 
         modules = load_modules()
         set_modules(modules)
         asyncio.run(connect_modules(modules))
 
-        main_loop.run_until_complete(start_telegram_bot(from_tg))
+        main_loop.run_until_complete(start_telegram_bot())
+        if from_tg:
+            from settings import Settings as sett
+            from startup_alert import deliver_restart_started
+            deliver_restart_started(sett.get("config"))
+        playerok_problem = main_loop.run_until_complete(asyncio.to_thread(check_playerok_connection))
         if not playerok_problem:
             try:
                 main_loop.run_until_complete(start_playerok_bot())
@@ -190,17 +210,28 @@ if __name__ == "__main__":
                 if playerok_bot is not None:
                     playerok_bot.connection_unavailable = True
 
+        startup_alert_sent = False
         if playerok_problem:
             from settings import Settings as sett
             from startup_alert import deliver_playerok_alert
             logger.error("Playerok недоступен: %s Telegram-бот остаётся активным.", playerok_problem)
-            if not deliver_playerok_alert(sett.get("config"), playerok_problem):
+            startup_alert_sent = deliver_playerok_alert(sett.get("config"), playerok_problem)
+            if not startup_alert_sent:
                 logger.error("Не удалось отправить предупреждение владельцу; проверьте Telegram и журнал.")
+        elif from_tg:
+            from settings import Settings as sett
+            from startup_alert import deliver_playerok_connected
+            deliver_playerok_connected(sett.get("config"))
 
         main_loop.create_task(clear_logs_task())
         main_loop.create_task(check_new_releases_task())
         if not playerok_problem:
             main_loop.create_task(monitor_playerok_proxy())
+        elif playerok_problem in (
+            "Прокси Playerok не отвечает.",
+            "Не удалось подключиться к аккаунту Playerok. Проверьте Cookie-данные и прокси.",
+        ):
+            main_loop.create_task(monitor_playerok_proxy(startup_unavailable=True, notified=startup_alert_sent))
 
         asyncio.run(call_bot_event("ON_INIT"))
         

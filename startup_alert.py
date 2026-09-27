@@ -63,6 +63,17 @@ def deliver_startup_alert(config: dict, problem: str, send=None, pause=None,
         pause(60)
 
 
+def deliver_restart_started(config: dict, send=None) -> bool:
+    """Confirm restart before checking Playerok."""
+    message = "✅ Бот был успешно перезагружен.\n⏳ Проверяю подключение к Playerok…"
+    return deliver_startup_alert(config, "", send=send, message=message, retry=False)
+
+
+def deliver_playerok_connected(config: dict, send=None) -> bool:
+    """Report a successful initial Playerok connection."""
+    return deliver_startup_alert(config, "", send=send, message="✅ Playerok подключён.", retry=False)
+
+
 def deliver_playerok_recovery(config: dict, send=None) -> bool:
     """Tell the owner that the Playerok proxy check succeeds again."""
     message = (
@@ -72,13 +83,38 @@ def deliver_playerok_recovery(config: dict, send=None) -> bool:
     return deliver_startup_alert(config, "", send=send, message=message, retry=False)
 
 
+def deliver_playerok_reconnected(config: dict, send=None) -> bool:
+    """Tell the owner that Playerok itself resumed after a failed startup."""
+    message = "✅ Playerok подключён. Работа восстановлена, /restart не требуется."
+    return deliver_startup_alert(config, "", send=send, message=message, retry=False)
+
+
 def deliver_playerok_alert(config: dict, problem: str, send=None) -> bool:
     """Warn the owner while keeping Telegram control available."""
-    message = (
-        f"⚠️ Playerok недоступен: {problem}\n\n"
-        "Telegram-бот продолжает работать. Откройте /start → Соединение → "
-        "Прокси для Playerok, укажите новый прокси и выполните /restart. "
-        "Если проблема в Cookie-данных, обновите их в разделе Авторизация. "
-        "Сохранённые настройки и данные не удалены."
+    if problem == "Прокси Playerok не отвечает.":
+        message = (
+            "⚠️ Playerok пока недоступен: прокси не отвечает.\n\n"
+            "Telegram-бот продолжает работать и автоматически повторит подключение. "
+            "Если прокси больше не работает, замените его в /start → «Соединение» → «Прокси для Playerok». "
+            "Настройки и Cookie-данные сохранены."
+        )
+        return deliver_startup_alert(config, problem, send=send, message=message, retry=False)
+
+    retrying = problem in (
+        "Прокси Playerok не отвечает.",
+        "Не удалось подключиться к аккаунту Playerok. Проверьте Cookie-данные и прокси.",
     )
+    if retrying:
+        instructions = (
+            "Telegram-бот продолжает работать. Бот повторит подключение к Playerok автоматически. "
+            "Если прокси больше не работает, замените его: /start → Соединение → Прокси для Playerok. "
+            "Если проблема в Cookie-данных, обновите их в разделе Авторизация. "
+        )
+    else:
+        instructions = (
+            "Telegram-бот продолжает работать. Проверьте прокси: /start → Соединение → "
+            "Прокси для Playerok. Если после восстановления сообщения или события не приходят, "
+            "выполните /restart. При проблеме с Cookie-данными обновите их в разделе Авторизация. "
+        )
+    message = f"⚠️ Playerok недоступен: {problem}\n\n{instructions}Сохранённые настройки и данные не удалены."
     return deliver_startup_alert(config, problem, send=send, message=message, retry=False)
