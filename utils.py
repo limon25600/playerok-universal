@@ -877,7 +877,7 @@ def check_playerok_connection():
             f"\n{Fore.LIGHTRED_EX}Похоже, что прокси для Playerok аккаунта не работает. "
             f"Пожалуйста, проверьте его и введите снова."
         )
-        
+
         playerok_problem = "Прокси Playerok не отвечает."
     elif config["playerok"]["api"]["proxy"]:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok прокси успешно работает.")
