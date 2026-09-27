@@ -1,7 +1,10 @@
 import copy
 import unittest
 
-from startup_alert import deliver_startup_alert, deliver_playerok_alert
+from startup_alert import (
+    deliver_startup_alert, deliver_playerok_alert, deliver_restart_started,
+    deliver_playerok_connected, deliver_playerok_reconnected,
+)
 
 
 class StartupAlertTests(unittest.TestCase):
@@ -64,6 +67,31 @@ class StartupAlertTests(unittest.TestCase):
         self.assertTrue(deliver_startup_alert(self.config, "test failure", send=send, pause=pauses.append))
         self.assertEqual(len(attempts), 2)
         self.assertEqual(pauses, [60])
+
+    def test_restart_messages_report_playerok_separately(self):
+        self.config["telegram"]["api"]["proxy"] = ""
+        messages = []
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {"ok": True}
+
+        def send(_url, **kwargs):
+            messages.append(kwargs["json"]["text"])
+            return Response()
+
+        self.assertTrue(deliver_restart_started(self.config, send=send))
+        self.assertTrue(deliver_playerok_alert(self.config, "Прокси Playerok не отвечает.", send=send))
+        self.assertTrue(deliver_playerok_reconnected(self.config, send=send))
+        self.assertTrue(deliver_playerok_connected(self.config, send=send))
+
+        self.assertEqual(messages[0], "✅ Бот был успешно перезагружен.\n⏳ Проверяю подключение к Playerok…")
+        self.assertIn("автоматически повторит подключение", messages[1])
+        self.assertNotIn("/restart", messages[1])
+        self.assertEqual(messages[2], "✅ Playerok подключён. Работа восстановлена, /restart не требуется.")
+        self.assertEqual(messages[3], "✅ Playerok подключён.")
 
     def test_playerok_notice_keeps_telegram_available_without_retry_loop(self):
         self.config["telegram"]["api"]["proxy"] = ""

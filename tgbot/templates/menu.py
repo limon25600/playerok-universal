@@ -12,7 +12,7 @@ def menu_text():
     playerok_status = (
         "🟢 Playerok подключён" if getattr(playerok_bot, "account", None) is not None
         and not getattr(playerok_bot, "connection_unavailable", False)
-        else "⚠️ Playerok недоступен. Проверьте прокси в разделе «Соединение», затем выполните /restart."
+        else "⚠️ Playerok недоступен. Проверьте прокси и Cookie-данные; при необходимости выполните /restart."
     )
     txt = textwrap.dedent(f"""
         <b>🏠 Playerok Universal</b> v{VERSION}

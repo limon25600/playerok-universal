@@ -837,15 +837,47 @@ def configure_config():
     
     logger.info("")
     
+    if config["telegram"]["api"]["proxy"] and not is_proxy_working(
+        config["telegram"]["api"]["proxy"],
+        "https://api.telegram.org/"
+    ):
+        print(
+            f"{Fore.LIGHTRED_EX}\nПохоже, что прокси для Telegram бота не работает. "
+            f"Пожалуйста, проверьте его и введите снова."
+        )
+
+        notify_startup_failure_and_stop(config, "Прокси Telegram не отвечает.")
+    elif config["telegram"]["api"]["proxy"]:
+        logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram прокси успешно работает.")
+
+    if not is_tg_bot_exists():
+        print(
+            f"{Fore.LIGHTRED_EX}\nНе удалось подключиться к вашему Telegram боту. "
+            f"Если вы находитесь на территории России, вам нужно подключить прокси к Telegram боту или использовать VPN, в виду блокировок со стороны РКН."
+        )
+        notify_startup_failure_and_stop(config, "Telegram API не отвечает. Проверьте токен и сеть.")
+    else:
+        logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram бот успешно работает.")
+
+    return None
+
+
+
+def check_playerok_connection():
+    """Check Playerok after Telegram has started polling."""
+    config = sett.get("config")
     playerok_problem = None
     if not config["playerok"]["api"]["cookies"]:
         playerok_problem = "Не заданы Cookie-данные Playerok."
-    elif config["playerok"]["api"]["proxy"] and not is_proxy_working(config["playerok"]["api"]["proxy"]):
+    elif config["playerok"]["api"]["proxy"] and not is_proxy_working(
+        config["playerok"]["api"]["proxy"],
+        timeout=max(1, min(config["playerok"]["api"]["proxy_check_timeout"], 120)),
+    ):
         print(
             f"\n{Fore.LIGHTRED_EX}Похоже, что прокси для Playerok аккаунта не работает. "
             f"Пожалуйста, проверьте его и введите снова."
         )
-        
+
         playerok_problem = "Прокси Playerok не отвечает."
     elif config["playerok"]["api"]["proxy"]:
         logger.info(f"{Fore.LIGHTYELLOW_EX}Playerok прокси успешно работает.")
@@ -861,28 +893,6 @@ def configure_config():
     if not playerok_problem and is_pl_account_banned():
         playerok_problem = "Аккаунт Playerok заблокирован."
         logger.error(f"{Fore.LIGHTRED_EX}{playerok_problem}")
-
-    if config["telegram"]["api"]["proxy"] and not is_proxy_working(
-        config["telegram"]["api"]["proxy"], 
-        "https://api.telegram.org/"
-    ):
-        print(
-            f"{Fore.LIGHTRED_EX}\nПохоже, что прокси для Telegram бота не работает. "
-            f"Пожалуйста, проверьте его и введите снова."
-        )
-        
-        notify_startup_failure_and_stop(config, "Прокси Telegram не отвечает.")
-    elif config["telegram"]["api"]["proxy"]:
-        logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram прокси успешно работает.")
-
-    if not is_tg_bot_exists():
-        print(
-            f"{Fore.LIGHTRED_EX}\nНе удалось подключиться к вашему Telegram боту. "
-            f"Если вы находитесь на территории России, вам нужно подключить прокси к Telegram боту или использовать VPN, в виду блокировок со стороны РКН."
-        )
-        notify_startup_failure_and_stop(config, "Telegram API не отвечает. Проверьте токен и сеть.")
-    else:
-        logger.info(f"{Fore.LIGHTYELLOW_EX}Telegram бот успешно работает.")
 
     return playerok_problem
 
